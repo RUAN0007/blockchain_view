@@ -103,3 +103,4 @@ Txn <txn_hash> has the following structure:
 ```
 docker-compose down
 ```
+**NOTE**: future `PRIVATE_CONFIG=ignore docker-compose up -d` will be a fresh start. 
