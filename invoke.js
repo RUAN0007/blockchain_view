@@ -38,5 +38,7 @@ web3.eth.getAccounts().then((accounts)=>{
         const hash = receipt.transactionHash;
         console.log("Txn " + hash + " has been committed in Block " + receipt.blockNumber + ". ")
     ///////////////////////////////////////////////////////////////
-    })
+    }).catch((err)=>{
+        console.log("Fail with err msg: " + err.message)
+    });
 });
