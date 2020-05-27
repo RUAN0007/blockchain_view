@@ -1,2 +1,7 @@
 node_modules/
 bk
+bin/
+crypto_config/
+channel_artifacts/
+*.block
+*DS_Store

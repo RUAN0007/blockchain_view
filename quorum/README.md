@@ -6,7 +6,7 @@ This repo demonstrates a minimum prototype that can deploy a contract, invoke a 
 * Install `node` (Version>v13.13.0) and `npm` (Version>v6.14.4) [Link](https://nodejs.org/en/download/current/)
 
 # Run
-**NOTE**: All the following commands are executed under the root directory of this repository. 
+**NOTE**: All the following commands are executed under this README directory. 
 ## Install Frontend Dependency
 Install dependent node modulers. 
 ```
