@@ -37,15 +37,17 @@ module.exports.createChannelAndClient = function (callerKeyFile, callerCertFile,
         return client.createUser(createUserOpt);
     }).then((user)=>{
         let channel = client.newChannel(channelName);
+        let peers = [];
         for (var i in peerAddrs) {
             let peer = client.newPeer(peerAddrs[i]);
             channel.addPeer(peer);
+            peers.push(peer);
         }
         var orderer = client.newOrderer(ordererAddr); 
         channel.addOrderer(orderer);
         channel.initialize();
 
-        return {channel: channel, client: client};
+        return {channel: channel, client: client, peers: peers};
     }).catch((err)=>{
         console.log("Err: ", err);
     });
