@@ -2,6 +2,7 @@
 const view = require("./fabric_view.js");
 const util = require('util');
 const ccUtil = require("./ccutil.js");
+const crypto = require('crypto');
 
 var callerKeyPath = process.argv[2];
 var callerCertPath = process.argv[3];
@@ -10,22 +11,75 @@ var channelName = process.argv[5];
 var peerAddr1 = process.argv[6];
 var ordererAddr = process.argv[7];
 var ccName = process.argv[8];
-var funcName = process.argv[9];
-var setKey = process.argv[10];
-var transientVal = process.argv[11];
+var viewCcid = process.argv[9];
+var funcName = "settransient"; 
+var setKey = "KK";
+var transientVal = "VVV";
 
+
+
+const keyPair = crypto.generateKeyPairSync('rsa', { 
+    modulusLength: 520, 
+    publicKeyEncoding: { 
+        type: 'spki', 
+        format: 'pem'
+    }, 
+    privateKeyEncoding: { 
+    type: 'pkcs8', 
+    format: 'pem', 
+    cipher: 'aes-256-cbc', 
+    passphrase: ''
+    } 
+}); 
+
+// The key pair for User U2. 
+const pubKey = keyPair.publicKey;
+const prvKey = keyPair.privateKey;
+var fabric_view;
+var view_name;
+
+/////////////////////////////////////////////////////////////
+// Below are expected to execute at the client side, who manages the view. 
 Promise.resolve().then(()=>{
     return ccUtil.createChannelAndClient(callerKeyPath, callerCertPath, callerMsp, channelName, [peerAddr1], ordererAddr);
 }).then((result)=>{
     result.peer = result.peers[0];
-    var fabric_view = new view.FabricView(result);
+    result.viewCcid = viewCcid;
+    fabric_view = new view.FabricView(result);
     var publicArgs = [setKey];
     var privateArgs = {};
     privateArgs[setKey] = Buffer.from(transientVal);
+    console.log("=======================================");
+    console.log("Step 1: User U1 invokes a normal private txn where the confidentiality comes from privateArgs. ");
     return fabric_view.SendTxn(ccName, funcName, publicArgs, privateArgs);
-// }).then(()=>{
+}).then((txnID)=>{
+    console.log("  The txnID is " + txnID);
+    console.log("=======================================");
+    console.log("Step 2: User U1 creates a view named ViewA, which consists of the single above txn. " + txnID);
+    return fabric_view.CreateView("ViewA", [txnID]);
+}).then((viewName)=>{
+    console.log("=======================================");
+    console.log("Step 3: User U1 distributes the view password protected by the public key of User U2. ");
+    view_name = viewName;
+    return fabric_view.DistributeView(viewName, pubKey);
+
+/////////////////////////////////////////////////////////////
+// Below are expected to execute at the user side. 
+}).then((encryptedPwd)=>{
+    console.log("=======================================");
+    console.log("Step 4: User U2 recovers the original pwd with his/her own password. ")
+    var pwd = crypto.privateDecrypt({key: prvKey, passphrase: ''}, encryptedPwd).toString("utf-8");
+    return fabric_view.PullView(view_name, pwd);
+}).then((result)=>{
+    console.log("=======================================");
+    console.log("Step 5: User U2 may now see ViewA's following details: ");
+    console.log("\tViewA's TxnIDs and the corresponding private args: ");
+    console.log("\t", JSON.stringify(result));
+    console.log("\tBy pulling txn contents with its ID from blockchains, along with the private args, User U2 is able to recover the entire txn. ");
+
 }).catch((err)=>{
-    console.log("Invocation fails with err msg: " + err.message);
+    console.log("Demo fails with the err msg: " + err.message);
+    throw err;
 }).finally(()=>{
     // console.log(util.format("Txn ID %s finishes. ", txIdObject.getTransactionID()))  
 });

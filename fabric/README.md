@@ -57,6 +57,9 @@ The Channel transaction, located at *channel_artifacts/channel.tx*, is used late
 Their detailed difference can be found [here](https://stackoverflow.com/questions/59300390/hyperledger-fabric-channel-tx-and-genesis-block-very-unclear).
 
 
+# View Demo
+Refer [view.md](view.md) to for the prototype of the view management. 
+
 # During Execution
 *NOTE*: We need not repeat the above steps in *Before Execution* for the repetitive execution. 
 
@@ -110,6 +113,7 @@ CHANNEL_NAME=demo
 ## Install the Chaincode/Smart Contract
 Installation simply copies the chaincode file to each peer. 
 First copy the chaincode *simplestorage* under ${GOPATH}/src:
+(This copy step need not repeated if we haven't modified go code in `$CC_PATH`. )
 ```
 CC_PATH=simplestorage # Path relative to the current directory
 CC_NAME=$(basename ${CC_PATH})
@@ -273,7 +277,7 @@ docker-compose down
 ```
 
 ## Remove the chaincode image
+This step can be skipped if the chaincode/contract code is not updated in the future. 
 ```
 docker rmi -f $(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'simplestorage')
 ```
-Future execution is a fresh start. 
