@@ -12,14 +12,14 @@ class FabricView {
 
     // a map from txnID to transientData, a transient data is a json that encodes privateArgs
         this.txnTransients = {}; 
-        // a map from viewName to view pwd
-        this.viewPwd = {};
+        this.viewStorage = {};
 
         var resizedIV = Buffer.allocUnsafe(16);
         var iv = crypto.createHash("sha256").update("anystring").digest();
         iv.copy(resizedIV);
         this.resizedIV = resizedIV;
     }
+
 
     encrypt(pwd, plainText) {
 
@@ -45,22 +45,22 @@ class FabricView {
             var txnID = txnIDs[i];
             viewTransientData[txnID] = this.txnTransients[txnID];
         }
-        let pwd = Math.random().toString(36).substring(6);
-        console.log(util.format("\tGenerate a random password %s. ", pwd))  
         let msg = JSON.stringify(viewTransientData);
-        console.log(util.format("\tUse the password to encode txn private args. "))
-        let encoded = this.encrypt(pwd, msg);
+        console.log(util.format("\tAssociate the txnID with the private args and serialize the association into a view msg: ", msg))
+        this.viewStorage[viewName] = msg;
 
-        console.log(util.format("\tUpload the encoded to a dedicated view_storage contract in blockchains, with the association to the view name. "))
-        this.viewPwd[viewName] = pwd;
+        let hashedMsg = crypto.createHash("sha256").update(msg).digest("hex");
+        console.log(util.format("\tHash the view msg to ", hashedMsg));
 
-        let publicArgs = [viewName, encoded];
+        console.log(util.format("\tUpload the hash to a dedicated view_storage contract in blockchains, with the association to the view name. "))
+
+        let publicArgs = [viewName, hashedMsg];
         return this.SendTxn(this.viewCcid, "store_view", publicArgs, undefined, true).then(()=>{
             return viewName;
         });
     }
 
-    PullView(viewName, pwd) {
+    PullView(viewName) {
 
         var txIdObject = this.client.newTransactionID();
         const queryRequest = {
@@ -69,20 +69,25 @@ class FabricView {
             args: [viewName],
             txId: txIdObject,
         }
-        console.log(util.format("\tFetch the encoded private args and txnIDs from blockchains given the view name %s", viewName))
+        console.log(util.format("\tFetch the view message hash from blockchains given the view name %s", viewName))
         return this.channel.queryByChaincode(queryRequest).then((results)=>{
             var encryptedBuffer = results[0].toString("utf8");
-            console.log(util.format("\tReveal the encoded with the recovered password. "));
-            return this.decrypt(pwd, encryptedBuffer);
+            return encryptedBuffer;
         })
     }
 
     // return as a Buffer type
     DistributeView(viewName, userPubKey) {
-        var viewPwd = this.viewPwd[viewName];
-        if (viewPwd !== undefined) {
-            const buffer = Buffer.from(viewPwd)
-            return crypto.publicEncrypt(userPubKey, buffer);
+        let pwd = Math.random().toString(36).substring(6);
+        console.log(util.format("\tGenerate a random password %s. ", pwd))  
+        var viewMsg = this.viewStorage[viewName];
+        var encodedViewMsg = this.encrypt(pwd, viewMsg);
+        console.log("\tEncode the view message with the pwd to ", encodedViewMsg);
+        if (viewMsg !== undefined) {
+            const buffer = Buffer.from(pwd)
+            var encodedViewPwd = crypto.publicEncrypt({key: userPubKey}, buffer);
+            console.log("\tEncode the view pwd with a user's public key: ", encodedViewPwd.toString('base64'));
+            return [encodedViewMsg, encodedViewPwd];
         } else {
             return undefined;
         }
