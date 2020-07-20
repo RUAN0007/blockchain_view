@@ -40,29 +40,51 @@ class FabricView {
     }
 
     CreateView(viewName, txnIDs) {
-        var viewTransientData = {};
-        for (var i in txnIDs) {
-            var txnID = txnIDs[i];
-            viewTransientData[txnID] = this.txnTransients[txnID];
-        }
-        let msg = JSON.stringify(viewTransientData);
-        console.log(util.format("\tAssociate the txnID with the private args and serialize the association into a view msg: ", msg))
-
         let pwd = Math.random().toString(36).substring(6);
-        console.log(util.format("\tGenerate a random password %s. ", pwd))  
-        console.log(util.format("\tUse the password to encode txn private args. "))
-        let encoded = this.encrypt(pwd, msg);
-
-        console.log(util.format("\tUpload the encoded to a dedicated view_storage contract in blockchains, with the association to the view name. "))
+        console.log(util.format("\tGenerate a random password %s. Use the password to encode each element of the view message.", pwd))  
         this.viewPwd[viewName] = pwd;
 
-        let publicArgs = [viewName, encoded];
+        console.log(util.format("\tAssociate the encrypted txnID with the encrypted private args and serialize the association into a view msg "))
+        var encodedMsgView = {}
+        for (var i in txnIDs) {
+            var txnID = txnIDs[i];
+            encodedMsgView[this.encrypt(pwd, txnID)] = this.encrypt(pwd, this.txnTransients[txnID]);
+        }
+
+        let msg = JSON.stringify(encodedMsgView);
+        console.log(util.format("\tUpload the encoded to a dedicated view_storage contract in blockchains, with the association to the view name. "))
+
+        let publicArgs = [viewName, msg];
         return this.SendTxn(this.viewCcid, "store_view", publicArgs, undefined, true).then(()=>{
             return viewName;
         });
     }
 
-    PullView(viewName, pwd) {
+
+    AppendView(viewName, txnIDs) {
+        console.log(util.format("\tFetch the password for view %s. Use the password to encode each element of the view message.", viewName))  
+        let pwd = this.viewPwd[viewName];
+        if (pwd === undefined) {
+            throw new Error("View " + viewName + " has not been created. ");
+        }
+
+        console.log(util.format("\tAssociate the encrypted txnID with the encrypted private args and serialize the association into a view msg: ", msg))
+        var encodedMsgView = {}
+        for (var i in txnIDs) {
+            var txnID = txnIDs[i];
+            encodedMsgView[this.encrypt(pwd, txnID)] = this.encrypt(pwd, this.txnTransients[txnID]);
+        }
+
+        let msg = JSON.stringify(encodedMsgView);
+        console.log(util.format("\tAppend the encoded to a dedicated view_storage contract in blockchains, with the association to the view name. "))
+
+        let publicArgs = [viewName, msg];
+        return this.SendTxn(this.viewCcid, "append_view", publicArgs, undefined, true).then(()=>{
+            return viewName;
+        });
+    }
+
+    PullView(viewName) {
 
         var txIdObject = this.client.newTransactionID();
         const queryRequest = {
@@ -71,11 +93,10 @@ class FabricView {
             args: [viewName],
             txId: txIdObject,
         }
-        console.log(util.format("\tFetch the encoded private args and txnIDs from blockchains given the view name %s", viewName))
+        console.log(util.format("\tFetch the encoded view message from blockchains given the view name %s", viewName))
         return this.channel.queryByChaincode(queryRequest).then((results)=>{
             var encryptedBuffer = results[0].toString("utf8");
-            console.log(util.format("\tReveal the encoded with the recovered password. "));
-            return this.decrypt(pwd, encryptedBuffer);
+            return encryptedBuffer;
         })
     }
 
@@ -86,6 +107,7 @@ class FabricView {
             const buffer = Buffer.from(viewPwd)
             return crypto.publicEncrypt(userPubKey, buffer);
         } else {
+            throw new Error("View " + viewName + " has not been created. ");
             return undefined;
         }
     }

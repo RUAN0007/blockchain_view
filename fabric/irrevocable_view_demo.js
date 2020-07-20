@@ -35,7 +35,8 @@ const pubKey = keyPair.publicKey;
 const prvKey = keyPair.privateKey;
 var fabric_view;
 var view_name;
-
+var txnID1, txnID2;
+var pwd;
 /////////////////////////////////////////////////////////////
 // Below are expected to execute at the U1 side, who invokes the transaction and creates the view. 
 Promise.resolve().then(()=>{
@@ -44,20 +45,31 @@ Promise.resolve().then(()=>{
     result.peer = result.peers[0];
     result.viewCcid = viewCcid;
     fabric_view = new view.FabricView(result);
-    var publicArgs = [setKey];
+    var publicArgs = [setKey + "1"];
     var privateArgs = {}; // equivalent ot Fabric's transientMap.
-    privateArgs[setKey] = Buffer.from(transientVal);
+    privateArgs[setKey + "1"] = Buffer.from(transientVal + "1");
     console.log("=======================================");
     console.log("Step 1: User U1 invokes a normal private txn where the confidentiality comes from privateArgs/transientMap. ");
     return fabric_view.SendTxn(ccName, funcName, publicArgs, privateArgs);
 }).then((txnID)=>{
-    console.log("  The txnID is " + txnID);
+    txnID1 = txnID;
+
+    var publicArgs = [setKey + "2"];
+    var privateArgs = {}; // equivalent ot Fabric's transientMap.
+    privateArgs[setKey + "2"] = Buffer.from(transientVal + "2");
     console.log("=======================================");
-    console.log("Step 2: User U1 creates a view named Irrevocable_ViewA, which consists of the single above txn. " + txnID);
-    return fabric_view.CreateView("Irrevocable_ViewA", [txnID]);
+    console.log("Step 2: User U1 invokes another normal private txn. ");
+    return fabric_view.SendTxn(ccName, funcName, publicArgs, privateArgs);
+}).then((txnID)=>{
+    txnID2 = txnID;
+    console.log("  Two txnIDs are " + txnID + " and " + txnID2);
+    console.log("=======================================");
+
+    console.log("Step 3: User U1 creates a view named Irrevocable_ViewA, which consists of two above txns. ");
+    return fabric_view.CreateView("Irrevocable_ViewA", [txnID1, txnID2]);
 }).then((viewName)=>{
     console.log("=======================================");
-    console.log("Step 3: User U1 distributes the view password protected by the public key of User U2. ");
+    console.log("Step 4: User U1 distributes the view password protected by the public key of User U2. ");
     view_name = viewName;
     return fabric_view.DistributeView(viewName, pubKey);
 
@@ -66,13 +78,19 @@ Promise.resolve().then(()=>{
 }).then((encryptedPwd)=>{
     console.log("=======================================");
     console.log("Step 4: User U2 attempts to recover the original pwd with his/her own private key. ")
-    var pwd = crypto.privateDecrypt({key: prvKey, passphrase: ''}, encryptedPwd).toString("utf-8");
-    return fabric_view.PullView(view_name, pwd);
+    pwd = crypto.privateDecrypt({key: prvKey, passphrase: ''}, encryptedPwd).toString("utf-8");
+    return fabric_view.PullView(view_name);
 }).then((result)=>{
     console.log("=======================================");
-    console.log("Step 5: User U2 may now see ViewA's following details: ");
-    console.log("\tViewA's TxnIDs and the corresponding private args (view message): ");
-    console.log("\t", JSON.stringify(result));
+    console.log("Step 5: User U2 fetches the encoded TxnIDs and the encoded private args (view message) ");
+    console.log("\tU2 decodes the txnID and private args as: ");
+    let viewMsg = JSON.parse(result);
+    for (const encodedTxnID in viewMsg) {
+        var txnID = fabric_view.decrypt(pwd, encodedTxnID);
+        var privateArgs = fabric_view.decrypt(pwd, viewMsg[encodedTxnID]);
+        console.log(txnID + ": " + privateArgs);
+    }
+
     console.log("\tBy pulling txn contents with its ID from blockchains, along with the private args(transientMaps), User U2 is able to recover the entire txn. ");
 
 }).catch((err)=>{

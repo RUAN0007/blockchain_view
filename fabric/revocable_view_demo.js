@@ -50,7 +50,7 @@ const pubKey = keyPair.publicKey;
 const prvKey = keyPair.privateKey;
 var fabric_view;
 var view_name;
-var self_computed_hash;
+var hashedViewMsg;
 
 /////////////////////////////////////////////////////////////
 // Below are expected to execute at the U1 side, who invokes the transaction and creates the view. 
@@ -60,9 +60,9 @@ Promise.resolve().then(()=>{
     result.peer = result.peers[0];
     result.viewCcid = viewCcid;
     fabric_view = new view.FabricView(result);
-    var publicArgs = [setKey];
+    var publicArgs = [setKey + "1"];
     var privateArgs = {}; // equivalent ot Fabric's transientMap. 
-    privateArgs[setKey] = Buffer.from(transientVal);
+    privateArgs[setKey + "1"] = Buffer.from(transientVal + "1");
     console.log("=======================================");
     console.log("Step 1: User U1 invokes a normal private txn where the confidentiality comes from privateArgs/transientMap. ");
     return fabric_view.SendTxn(ccName, funcName, publicArgs, privateArgs);
@@ -70,10 +70,27 @@ Promise.resolve().then(()=>{
     console.log("  The txnID is " + txnID);
     console.log("=======================================");
     console.log("Step 2: User U1 creates a view named Revocable_ViewA, which consists of the single above txn. " + txnID);
+
     return fabric_view.CreateView("Revocable_ViewA", [txnID]);
+
+}).then(()=>{
+    var publicArgs = [setKey + "2"];
+    var privateArgs = {}; // equivalent ot Fabric's transientMap. 
+    privateArgs[setKey + "2"] = Buffer.from(transientVal + "2");
+    console.log("=======================================");
+    console.log("Step 3: User U1 invokes another normal private txn where the confidentiality comes from privateArgs/transientMap. ");
+    return fabric_view.SendTxn(ccName, funcName, publicArgs, privateArgs);
+
+}).then((txnID)=>{
+    console.log("  The txnID is " + txnID);
+    console.log("=======================================");
+    console.log("Step 4: User U1 appends this new txnID to Revocable_ViewA " + txnID);
+
+    return fabric_view.AppendView("Revocable_ViewA", [txnID]);
+
 }).then((viewName)=>{
     console.log("=======================================");
-    console.log("Step 3: User U1 distributes the actual view contents protected by the public key of User U2. ");
+    console.log("Step 5: User U1 distributes the actual view contents protected by the public key of User U2. ");
     view_name = viewName;
     return fabric_view.DistributeView(viewName, pubKey);
 
@@ -83,20 +100,26 @@ Promise.resolve().then(()=>{
     var encodedViewMsg = encoded[0];
     var encodedViewPwd = encoded[1];
     console.log("=======================================");
-    console.log("Step 4: User U2 attempts to recover the original view msg of " + view_name);
+    console.log("Step 6: User U2 attempts to recover the original view msg of " + view_name);
     var viewPwd = crypto.privateDecrypt({key: prvKey, passphrase: ''}, encodedViewPwd).toString("utf-8");
     console.log("\tThe recovered the view pwd decrypted from U2's private key: ", viewPwd);
     var viewMsg = fabric_view.decrypt(viewPwd, encodedViewMsg);
     console.log("\tThe recovered view message decrypted from the password: ", viewMsg);
 
-    self_computed_hash = crypto.createHash("sha256").update(viewMsg).digest("hex");
+    var viewContents = JSON.parse(viewMsg);
+    hashedViewMsg = {};
+    for (const txnID in viewContents) {
+        let hashedTxnID = crypto.createHash("sha256").update(txnID).digest("hex");
+        let hashedTransients = crypto.createHash("sha256").update(viewContents[txnID]).digest("hex");
+        hashedViewMsg[hashedTxnID] = hashedTransients;
+    }
 
     return fabric_view.PullView(view_name);
 }).then((result)=>{
     console.log("=======================================");
-    console.log("Step 5: User U2 may now see ViewA's digest for the validation: ");
+    console.log("Step 7: User U2 may now see ViewA's digest for the validation: ");
     console.log("\t The hash of view message fetched from the ledger: ", result);
-    console.log("\t The hash locally computed from view message provided by U1: ", self_computed_hash);
+    console.log("\t The hash locally computed from view message provided by U1: ", JSON.stringify(hashedViewMsg));
 
 }).catch((err)=>{
     console.log("Demo fails with the err msg: " + err.message);

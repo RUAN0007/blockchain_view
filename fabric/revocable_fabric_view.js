@@ -40,22 +40,51 @@ class FabricView {
     }
 
     CreateView(viewName, txnIDs) {
-        var viewTransientData = {};
+        var viewMsg = {};
+        var hashedViewMsg = {};
+        console.log(util.format("\tAssociate the hashed txnID with the hashed private args and serialize the association into a view msg."))
         for (var i in txnIDs) {
             var txnID = txnIDs[i];
-            viewTransientData[txnID] = this.txnTransients[txnID];
+            viewMsg[txnID] = this.txnTransients[txnID];
+
+            let hashedTxnID = crypto.createHash("sha256").update(txnID).digest("hex");
+            let hashedTransients = crypto.createHash("sha256").update(this.txnTransients[txnID]).digest("hex");
+            hashedViewMsg[hashedTxnID] = hashedTransients;
         }
-        let msg = JSON.stringify(viewTransientData);
-        console.log(util.format("\tAssociate the txnID with the private args and serialize the association into a view msg: ", msg))
-        this.viewStorage[viewName] = msg;
+        this.viewStorage[viewName] = viewMsg;
 
-        let hashedMsg = crypto.createHash("sha256").update(msg).digest("hex");
-        console.log(util.format("\tHash the view msg to ", hashedMsg));
+        let msg = JSON.stringify(hashedViewMsg);
 
-        console.log(util.format("\tUpload the hash to a dedicated view_storage contract in blockchains, with the association to the view name. "))
+        console.log(util.format("\tUpload the hashed view message to a dedicated view_storage contract in blockchains, with the association to the view name. "))
 
-        let publicArgs = [viewName, hashedMsg];
+        let publicArgs = [viewName, msg];
         return this.SendTxn(this.viewCcid, "store_view", publicArgs, undefined, true).then(()=>{
+            return viewName;
+        });
+    }
+
+    AppendView(viewName, txnIDs) {
+        let prevViewMsg = this.viewStorage[viewName];
+        if (prevViewMsg === undefined)  {
+            throw new Error(util.format("View %s has not been created. ", viewName))
+        }
+
+        var hashedViewMsg = {};
+        for (var i in txnIDs) {
+            var txnID = txnIDs[i];
+            prevViewMsg[txnID] = this.txnTransients[txnID];
+
+            let hashedTxnID = crypto.createHash("sha256").update(txnID).digest("hex");
+            let hashedTransients = crypto.createHash("sha256").update(this.txnTransients[txnID]).digest("hex");
+            hashedViewMsg[hashedTxnID] = hashedTransients;
+        }
+        let msg = JSON.stringify(hashedViewMsg);
+        console.log(util.format("\tAssociate the hashed txnID with the hashed private args and serialize the association into a view msg: ", msg))
+
+        console.log(util.format("\tAppend the hashed view message to a dedicated view_storage contract in blockchains, with the association to the view name. "))
+
+        let publicArgs = [viewName, msg];
+        return this.SendTxn(this.viewCcid, "append_view", publicArgs, undefined, true).then(()=>{
             return viewName;
         });
     }
@@ -81,7 +110,7 @@ class FabricView {
         let pwd = Math.random().toString(36).substring(6);
         console.log(util.format("\tGenerate a random password %s. ", pwd))  
         var viewMsg = this.viewStorage[viewName];
-        var encodedViewMsg = this.encrypt(pwd, viewMsg);
+        var encodedViewMsg = this.encrypt(pwd, JSON.stringify(viewMsg));
         console.log("\tEncode the view message with the pwd to ", encodedViewMsg);
         if (viewMsg !== undefined) {
             const buffer = Buffer.from(pwd)

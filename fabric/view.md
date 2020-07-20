@@ -89,7 +89,7 @@ Hence, the access control management is performed solely on the private args.
 
 In the following, a __view message__ is a map structure that associates the transaction IDs with its private args for all related transactions in this view. 
 
-## Irrevocable View
+## Irrevocable View (Snapshot-based)
 ```
 CallerKeyPath=$(ls crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp/keystore/*)
 CallerCertPath=crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp/signcerts/Admin@org1.example.com-cert.pem
@@ -103,16 +103,15 @@ View_CC_NAME=view_storage
 node irrevocable_view_demo.js ${CallerKeyPath} ${CallerCertPath} ${CallerMsp} ${CHANNEL_NAME} ${Peer1Addr}  ${OrdererAddr} ${CC_NAME} ${View_CC_NAME}
 ```
 
-The script demonstrates an end-to-end example for the prototype of irrevocable view management.
-* A user U1 invokes a transaction with public and private args. 
-* U1 creates a view for this single transaction by encoding the view message with a password and uploading the encoded to the chain. 
+The script demonstrates an end-to-end example for the prototype of the irrevocable view management.
+* A user U1 invokes two transactions with public and private args. 
+* U1 creates a view for this single transaction by encoding each key/value of the view message with a password and uploading the encoded association to the chain. 
 * Afterwards U1 distributes view-specific password to a User U2. 
 * Then User U2 pulls the encoded view message from the chain and recovers it with the provided password. 
 
 Refer to the console display for the details of each step. 
-The first three steps are initiated by U1 and the last two steps are performed by U2. 
 
-## Revocable View
+## Revocable View (Delta-based)
 ```
 CallerKeyPath=$(ls crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp/keystore/*)
 CallerCertPath=crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp/signcerts/Admin@org1.example.com-cert.pem
@@ -126,14 +125,14 @@ View_CC_NAME=view_storage
 node revocable_view_demo.js ${CallerKeyPath} ${CallerCertPath} ${CallerMsp} ${CHANNEL_NAME} ${Peer1Addr}  ${OrdererAddr} ${CC_NAME} ${View_CC_NAME}
 ```
 
-The script demonstrates an end-to-end example for the prototype of revocable view management.
+The script demonstrates an end-to-end example for the prototype of the revocable view management.
 
-* A user U1 invokes a private transaction and creates a view for this single transaction by uploading the __hash__ of the view message to the chain. 
-* U1 then distributes the encoded view message (encoded by a random password) to a User U2. U1 also sends the encoded password protected by U2's public key. 
-* Then User U2 recovers the password and then uses the password to recover the view message. U2 then pulls the hash of the view message from the chain for the validation. 
+* A user U1 invokes a private transaction and creates a view for this single transaction by uploading the __hash__ of each key/value in the view message to the chain. 
+* U1 again invokes another private transaction and **appends** this new transaction to the created view. 
+* U1 then distributes the encoded view message, (encoded by a random password), which consists of two transactions, to a User U2. U1 also sends the encoded password protected by U2's public key. 
+* Then User U2 recovers the password and then uses the password to recover the view message. U2 then pulls the key/value hash of the view message from the chain for the validation. 
 
 Refer to the console display for the details of each step. 
-The first two steps are initiated by U1 and the last step is performed by U2. 
 
 # Post-Execution
 ## Spin off the network
