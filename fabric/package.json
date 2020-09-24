@@ -6,6 +6,7 @@
     "npm": ">=5.6.0"
   },
   "dependencies": {
-    "fabric-client": "1.4"
+    "fabric-client": "1.4",
+    "readline-sync": "^1.4.10"
   }
 }

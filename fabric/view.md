@@ -11,7 +11,7 @@ Copy the chaincode *private_contract* under ${GOPATH}/src:
 CC_PATH=private_contract # Path relative to the current directory
 CC_NAME=$(basename ${CC_PATH})
 rm -rf ${GOPATH}/src/${CC_PATH}
-cp -r ${CC_PATH} ${GOPATH}/src/
+cp -r ${CC_PATH}/ ${GOPATH}/src/
 CC_VERSION=1.0
 ```
 
@@ -45,7 +45,7 @@ CC_PATH=view_storage # Path relative to the current directory
 CC_NAME=$(basename ${CC_PATH})
 CC_VERSION=1.0
 rm -rf ${GOPATH}/src/${CC_PATH}
-cp -r ${CC_PATH} ${GOPATH}/src/
+cp -r ${CC_PATH}/ ${GOPATH}/src/
 ```
 
 ### Install (Org1 and Org2 both)
@@ -152,3 +152,132 @@ docker rmi -f $(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'view_s
 ```
 docker rmi -f $(docker images --format '{{.Repository}}:{{.Tag}}' | grep 'private_contract')
 ```
+
+
+
+
+
+
+
+
+# All in All
+```
+docker-compose up -d
+
+sleep 5s
+
+export FABRIC_CFG_PATH=.
+export CORE_PEER_ADDRESS=localhost:7051
+export CORE_PEER_LOCALMSPID=Org1MSP 
+export CORE_PEER_MSPCONFIGPATH=./crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp 
+
+ORDERER_ADDR=localhost:7050
+CHANNEL_NAME=demo
+./bin/peer channel create -o $ORDERER_ADDR -c $CHANNEL_NAME -f ./channel_artifacts/channel.tx
+
+
+export CORE_PEER_ADDRESS=localhost:7051
+export CORE_PEER_LOCALMSPID=Org1MSP 
+export CORE_PEER_MSPCONFIGPATH=./crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp 
+CHANNEL_NAME=demo
+
+./bin/peer channel join -b ./${CHANNEL_NAME}.block
+
+
+export CORE_PEER_ADDRESS=localhost:8051
+export CORE_PEER_LOCALMSPID=Org2MSP 
+export CORE_PEER_MSPCONFIGPATH=./crypto_config/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp 
+CHANNEL_NAME=demo
+
+./bin/peer channel join -b ./${CHANNEL_NAME}.block
+
+sleep 5s
+
+# Install Private Contract
+CC_PATH=private_contract # Path relative to the current directory
+CC_NAME=$(basename ${CC_PATH})
+rm -rf ${GOPATH}/src/${CC_PATH}
+cp -r ${CC_PATH}/ ${GOPATH}/src/
+CC_VERSION=1.0
+
+
+export CORE_PEER_ADDRESS=localhost:7051
+export CORE_PEER_LOCALMSPID=Org1MSP 
+export CORE_PEER_MSPCONFIGPATH=./crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp 
+
+CC_PATH=private_contract # Path relative to the current directory
+CC_NAME=$(basename ${CC_PATH})
+CC_VERSION=1.0
+./bin/peer chaincode install -n ${CC_NAME} -p ${CC_PATH} -v ${CC_VERSION}
+
+
+export CORE_PEER_ADDRESS=localhost:7051
+export CORE_PEER_LOCALMSPID=Org1MSP 
+export CORE_PEER_MSPCONFIGPATH=./crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp 
+
+./bin/peer chaincode instantiate -o ${ORDERER_ADDR} -C ${CHANNEL_NAME} -c '{"Args":["init"]}' -n ${CC_NAME}  -v ${CC_VERSION} -P "OR ('Org1MSP.member')" --collections-config private_contract/collections_config.json
+
+
+# Install View Manager Contract
+
+CC_PATH=view_storage # Path relative to the current directory
+CC_NAME=$(basename ${CC_PATH})
+CC_VERSION=1.0
+rm -rf ${GOPATH}/src/${CC_PATH}
+cp -r ${CC_PATH}/ ${GOPATH}/src/
+
+
+export CORE_PEER_ADDRESS=localhost:7051
+export CORE_PEER_LOCALMSPID=Org1MSP 
+export CORE_PEER_MSPCONFIGPATH=./crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp 
+
+CC_PATH=view_storage # Path relative to the current directory
+CC_NAME=$(basename ${CC_PATH})
+CC_VERSION=1.0
+./bin/peer chaincode install -n ${CC_NAME} -p ${CC_PATH} -v ${CC_VERSION}
+
+
+
+export CORE_PEER_ADDRESS=localhost:8051
+export CORE_PEER_LOCALMSPID=Org2MSP 
+export CORE_PEER_MSPCONFIGPATH=./crypto_config/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp 
+
+./bin/peer chaincode install -n ${CC_NAME} -p ${CC_PATH} -v ${CC_VERSION}
+
+export CORE_PEER_ADDRESS=localhost:7051
+export CORE_PEER_LOCALMSPID=Org1MSP 
+export CORE_PEER_MSPCONFIGPATH=./crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp 
+
+./bin/peer chaincode instantiate -o ${ORDERER_ADDR} -C ${CHANNEL_NAME} -c '{"Args":["init"]}' -n ${CC_NAME}  -v ${CC_VERSION} -P "OR ('Org1MSP.member', 'Org2MSP.member')"
+```
+
+
+```
+CallerKeyPath=$(ls crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp/keystore/*)
+CallerCertPath=crypto_config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp/signcerts/Admin@org1.example.com-cert.pem
+CallerMsp=Org1MSP
+CHANNEL_NAME=demo
+Peer1Addr=grpc://localhost:7051
+OrdererAddr=grpc://localhost:7050
+CC_NAME=private_contract
+VIEW_CCID=view_storage
+
+node view_demo.js ${CallerKeyPath} ${CallerCertPath} ${CallerMsp} ${CHANNEL_NAME} ${Peer1Addr}  ${OrdererAddr} ${CC_NAME} ${VIEW_CCID}
+```
+
+
+```
+docker-compose down
+```
+
+# Presentation Schedule
+Illustrate the distinction between encryption-based/hashed-based irrevocable/revocable view management. 
+Revocable management does not send the encoded confidential data into the blockchain. 
+
+Explain the FabricSupport.js with respect to view_storage.go and simplestorage.go
+
+Explain the encryption-based revocable view management. 
+* Explain one step, execute one step
+
+Explain the hash-based revocable view management. 
+* Explain one step, execute one step

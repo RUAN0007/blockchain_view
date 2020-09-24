@@ -8,6 +8,7 @@ import (
 )
 
 const key = "key"
+const secretKey = "secretkey"
 
 type PrivateContract struct {
 }
@@ -25,6 +26,9 @@ func (t *PrivateContract) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 		return shim.Success(valbytes)
 	} else if function == "set" {
 		_ = stub.PutState(key, []byte(args[0]))
+		return shim.Success(nil)
+	} else if function == "setSecret" {
+		_ = stub.PutState(secretKey, []byte(args[0]))
 		return shim.Success(nil)
 	} else if function == "settransient" {
 		if transients, err := stub.GetTransient(); err != nil {
